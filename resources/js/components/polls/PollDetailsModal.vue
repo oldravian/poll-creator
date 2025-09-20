@@ -7,6 +7,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { useDateFormat } from '@/composables/useDateFormat';
 import {
     BarChart3,
     Calendar,
@@ -51,41 +52,8 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<Emits>();
 
-// Utility functions
-const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffInDays = Math.floor(
-        (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24),
-    );
-
-    if (diffInDays === 0) {
-        return 'Today';
-    } else if (diffInDays === 1) {
-        return 'Yesterday';
-    } else if (diffInDays < 7) {
-        return `${diffInDays} days ago`;
-    } else {
-        return date.toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-        });
-    }
-};
-
-const formatExpiryDate = (dateString: string | null) => {
-    if (!dateString) return 'Never expires';
-
-    const date = new Date(dateString);
-    const now = new Date();
-
-    if (date < now) {
-        return 'Expired';
-    } else {
-        return `Expires ${date.toLocaleDateString()}`;
-    }
-};
+// Use date formatting composable
+const { formatDateSimple, formatExpiryDate } = useDateFormat();
 
 const copyPollLink = async () => {
     if (!props.poll) return;
@@ -153,7 +121,7 @@ const getVotePercentage = (optionVotes: number, totalVotes: number): number => {
                     >
                         <div class="flex items-center gap-2">
                             <Calendar class="h-4 w-4" />
-                            <span>{{ formatDate(poll.created_at) }}</span>
+                            <span>{{ formatDateSimple(poll.created_at) }}</span>
                         </div>
 
                         <div class="flex items-center gap-2">

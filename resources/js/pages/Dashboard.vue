@@ -10,10 +10,12 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { useDateFormat } from '@/composables/useDateFormat';
+import { usePollActions } from '@/composables/usePollActions';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { dashboard } from '@/routes';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router, usePage } from '@inertiajs/vue3';
+import { Head, usePage } from '@inertiajs/vue3';
 import {
     BarChart3,
     Calendar,
@@ -58,104 +60,25 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
+// Composables
+const { formatDate, formatExpiryDate } = useDateFormat();
+const {
+    copiedPollId,
+    successMessage,
+    copyPollLink,
+    openPollInNewTab,
+    handlePollCreated,
+    handlePollUpdated,
+    deletePoll,
+    processUrlSuccessMessages,
+} = usePollActions();
+
 // Modal state
 const showCreateModal = ref(false);
 const showUpdateModal = ref(false);
 const showDeleteConfirm = ref(false);
 const showDetailsModal = ref(false);
 const selectedPoll = ref<Poll | null>(null);
-
-// Success message state
-const successMessage = ref('');
-
-// Copy link feedback state
-const copiedPollId = ref<number | null>(null);
-
-// Utility functions
-const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffInDays = Math.floor(
-        (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24),
-    );
-
-    if (diffInDays === 0) {
-        const diffInHours = Math.floor(
-            (now.getTime() - date.getTime()) / (1000 * 60 * 60),
-        );
-        if (diffInHours === 0) {
-            return 'Just now';
-        }
-        return `${diffInHours} hour${diffInHours === 1 ? '' : 's'} ago`;
-    } else if (diffInDays === 1) {
-        return 'Yesterday';
-    } else if (diffInDays < 7) {
-        return `${diffInDays} days ago`;
-    } else {
-        return date.toLocaleDateString();
-    }
-};
-
-const formatExpiryDate = (dateString: string | null) => {
-    if (!dateString) return 'Never expires';
-
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffInDays = Math.ceil(
-        (date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
-    );
-
-    if (diffInDays < 0) {
-        return 'Expired';
-    } else if (diffInDays === 0) {
-        return 'Expires today';
-    } else if (diffInDays === 1) {
-        return 'Expires tomorrow';
-    } else if (diffInDays < 7) {
-        return `Expires in ${diffInDays} days`;
-    } else {
-        return `Expires ${date.toLocaleDateString()}`;
-    }
-};
-
-const copyPollLink = async (slug: string, pollId: number) => {
-    const url = `${window.location.origin}/poll/${slug}`;
-    try {
-        await navigator.clipboard.writeText(url);
-        // Show success feedback in the card
-        copiedPollId.value = pollId;
-        // Hide the feedback after 2 seconds
-        setTimeout(() => {
-            copiedPollId.value = null;
-        }, 2000);
-    } catch (err) {
-        console.error('Failed to copy link:', err);
-        // You could show an error message here if needed
-    }
-};
-
-const openPollInNewTab = (slug: string) => {
-    const url = `/poll/${slug}`;
-    try {
-        // Create a temporary anchor element and click it
-        const link = document.createElement('a');
-        link.href = url;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    } catch (err) {
-        console.error('Failed to open poll in new tab:', err);
-        // Fallback: try window.open if available
-        if (typeof window !== 'undefined' && window.open) {
-            window.open(url, '_blank', 'noopener,noreferrer');
-        } else {
-            // Last resort: navigate to the URL in the same tab
-            window.location.href = url;
-        }
-    }
-};
 
 // Modal handlers
 const openCreateModal = () => {
@@ -180,39 +103,12 @@ const openDeleteConfirm = (poll: Poll) => {
 const handleDeleteConfirm = async () => {
     if (!selectedPoll.value) return;
 
-    try {
-        const response = await fetch(`/api/polls/${selectedPoll.value.id}`, {
-            method: 'DELETE',
-            headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-            },
-            credentials: 'same-origin',
-        });
+    const success = await deletePoll(selectedPoll.value.id);
 
-        const data = await response.json();
-
-        if (response.ok && data.success) {
-            // Close confirmation dialog
-            showDeleteConfirm.value = false;
-            selectedPoll.value = null;
-            // Show success message and refresh
-            setTimeout(() => {
-                router.visit(
-                    window.location.pathname + '?success=poll_deleted',
-                    {
-                        preserveState: false,
-                        preserveScroll: true,
-                    },
-                );
-            }, 100);
-        } else {
-            console.error('Delete failed:', data.message);
-            // You could show an error message here
-        }
-    } catch (error) {
-        console.error('Network error:', error);
-        // You could show an error message here
+    if (success) {
+        // Close confirmation dialog
+        showDeleteConfirm.value = false;
+        selectedPoll.value = null;
     }
 };
 
@@ -221,62 +117,9 @@ const handleDeleteCancel = () => {
     selectedPoll.value = null;
 };
 
-// Success message handlers
-const showSuccessMessage = (message: string) => {
-    successMessage.value = message;
-    setTimeout(() => {
-        successMessage.value = '';
-    }, 8000); // Hide after 8 seconds
-};
-
-// Listen for poll creation success
-const handlePollCreated = () => {
-    // Refresh the polls data to show the new poll with success message
-    setTimeout(() => {
-        router.visit(window.location.pathname + '?success=poll_created', {
-            preserveState: false,
-            preserveScroll: true,
-        });
-    }, 100);
-};
-
-// Listen for poll update success
-const handlePollUpdated = () => {
-    // Refresh the polls data to show the updated poll with success message
-    console.log('Triggering data refresh after poll update');
-
-    // Pass success message as URL parameter to persist across refresh
-    setTimeout(() => {
-        router.visit(window.location.pathname + '?success=poll_updated', {
-            preserveState: false,
-            preserveScroll: true,
-        });
-    }, 100); // Small delay to ensure modal is fully closed
-};
-
-// Check for success messages from URL parameters on component mount
+// Initialize success message handling on mount
 onMounted(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const successParam = urlParams.get('success');
-
-    if (successParam === 'poll_created') {
-        showSuccessMessage(
-            'Poll created successfully! You can now share it with others.',
-        );
-        // Clean up URL by removing the success parameter
-        const newUrl = window.location.pathname;
-        window.history.replaceState({}, '', newUrl);
-    } else if (successParam === 'poll_updated') {
-        showSuccessMessage('Poll updated successfully!');
-        // Clean up URL by removing the success parameter
-        const newUrl = window.location.pathname;
-        window.history.replaceState({}, '', newUrl);
-    } else if (successParam === 'poll_deleted') {
-        showSuccessMessage('Poll deleted successfully!');
-        // Clean up URL by removing the success parameter
-        const newUrl = window.location.pathname;
-        window.history.replaceState({}, '', newUrl);
-    }
+    processUrlSuccessMessages();
 });
 </script>
 
