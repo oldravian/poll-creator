@@ -53,7 +53,7 @@ const polls = page.props.polls as Poll[];
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
-        title: 'Dashboard',
+        title: 'Polls Listing',
         href: dashboard().url,
     },
 ];
@@ -281,7 +281,7 @@ onMounted(() => {
 </script>
 
 <template>
-    <Head title="Dashboard" />
+    <Head title="Polls Listing" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <!-- Success Message -->
