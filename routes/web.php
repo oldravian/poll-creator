@@ -8,6 +8,10 @@ Route::get('/', function () {
     return Inertia::render('Welcome');
 })->name('home');
 
+Route::get('app-selection', function () {
+    return Inertia::render('AppSelection');
+})->middleware(['auth', 'verified'])->name('app.selection');
+
 Route::get('dashboard', [PollController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('dashboard');
